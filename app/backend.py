@@ -36,6 +36,7 @@ from PySide6.QtSvg import QSvgRenderer
 
 from .config import AppPaths, HardwareInfo, Settings, available_memory_bytes, resource_root
 from .database import ChatDatabase, Conversation, suggest_title
+from .export import conversation_to_json, conversation_to_markdown, default_filename
 from .formatting import DARK_SYNTAX, LIGHT_SYNTAX, segment_message, strip_reasoning
 from .inference import (
     ChatMessage,
@@ -548,6 +549,47 @@ class Backend(QObject):
         if self._conversation and self._conversation.id == conversation_id:
             self.newChat()
         self.reload_conversations()
+
+    @Slot(str, str, str, result=bool)
+    def exportConversation(  # noqa: N802
+        self, conversation_id: str, file_path: str, fmt: str
+    ) -> bool:
+        """Export *conversation_id* to *file_path* in *fmt* (``"md"`` or ``"json"``).
+
+        Called from QML after the user picks a save location via FileDialog.
+        Returns ``True`` on success, ``False`` on any error (a toast is shown).
+        """
+        conv = self.db.get_conversation(conversation_id)
+        if conv is None:
+            self.toast.emit("Could not find that conversation.", "error")
+            return False
+        msgs = self.db.messages(conversation_id)
+        try:
+            if fmt == "json":
+                text = conversation_to_json(conv, msgs)
+            else:
+                text = conversation_to_markdown(conv, msgs)
+            # QML passes a file:// URL on macOS; normalise to a plain path.
+            path = QUrl(file_path).toLocalFile() if file_path.startswith("file:") else file_path
+            Path(path).write_text(text, encoding="utf-8")
+            self.toast.emit("Conversation exported successfully.", "info")
+            return True
+        except OSError as exc:
+            log.warning("Export failed: %s", exc)
+            self.toast.emit(f"Export failed: {exc.strerror}", "error")
+            return False
+        except Exception as exc:  # pragma: no cover
+            log.exception("Unexpected export error")
+            self.toast.emit(f"Export failed: {exc}", "error")
+            return False
+
+    @Slot(str, str, result=str)
+    def exportDefaultFilename(self, conversation_id: str, fmt: str) -> str:  # noqa: N802
+        """Return a sensible default save filename for *conversation_id*."""
+        conv = self.db.get_conversation(conversation_id)
+        if conv is None:
+            return f"conversation.{fmt}"
+        return default_filename(conv, fmt)
 
     # ============================================================ model state
 
