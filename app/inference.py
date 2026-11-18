@@ -70,6 +70,20 @@ class InferenceError(Exception):
     """A user-presentable runtime failure."""
 
 
+# Tokens kept free for chat-template markers around the prompt.
+PROMPT_OVERHEAD_TOKENS = 64
+
+
+def effective_max_tokens(max_tokens: int, context_length: int) -> int:
+    """The response length that fits a model with ``context_length`` tokens of context.
+
+    The reply may use at most half of the context, so the other half stays for the
+    prompt and the chat history. The Maximum response length setting can be larger
+    than that (4K on a 2K model), and llama.cpp rejects prompt + max_tokens > n_ctx.
+    """
+    return max(1, min(max_tokens, context_length // 2))
+
+
 TokenCallback = Callable[[str], None]
 StopCheck = Callable[[], bool]
 
@@ -187,7 +201,8 @@ class LlamaCppEngine(InferenceEngine):
     ) -> GenerationResult:
         if self._llm is None or self._spec is None:
             raise InferenceError("No model is loaded.")
-        payload = self._fit_context(messages, params.max_tokens)
+        max_tokens = effective_max_tokens(params.max_tokens, self._spec.context_length)
+        payload = self._fit_context(messages, max_tokens)
         start = time.monotonic()
         pieces: list[str] = []
         tokens = 0
@@ -200,7 +215,7 @@ class LlamaCppEngine(InferenceEngine):
                 temperature=params.temperature,
                 top_p=params.top_p,
                 repeat_penalty=params.repeat_penalty,
-                max_tokens=params.max_tokens,
+                max_tokens=max_tokens,
                 stop=SMOLVLM_STOP if self._vision else None,
             )
             for chunk in stream:
@@ -225,7 +240,7 @@ class LlamaCppEngine(InferenceEngine):
     def _fit_context(self, messages: list[ChatMessage], max_tokens: int) -> list[dict]:
         """Drop the oldest turns until the prompt fits the context window."""
         assert self._llm is not None and self._spec is not None
-        budget = self._spec.context_length - max_tokens - 64
+        budget = max(0, self._spec.context_length - max_tokens - PROMPT_OVERHEAD_TOKENS)
         system = [m for m in messages if m.role == "system"]
         rest = [m for m in messages if m.role != "system"]
 
