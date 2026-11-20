@@ -1329,14 +1329,15 @@ class Backend(QObject):
         if not hasattr(self.settings, key):
             log.warning("Unknown setting %s", key)
             return
-        current = getattr(self.settings, key)
         try:
-            value = type(current)(value)
-        except (TypeError, ValueError):
+            valid_value = Settings.validate_value(key, value)
+        except (TypeError, ValueError) as exc:
+            log.warning("Invalid setting %s=%r: %s", key, value, exc)
             return
-        if value == current:
+        current = getattr(self.settings, key)
+        if valid_value == current:
             return
-        setattr(self.settings, key, value)
+        setattr(self.settings, key, valid_value)
         self.settings.save(self.paths.settings_file)
         self.settingsChanged.emit()
         if key == "theme" and self._conversation:
