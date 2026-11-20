@@ -158,9 +158,33 @@ class LlamaCppEngine(InferenceEngine):
                 "The llama.cpp runtime (llama-cpp-python) is not installed or failed to load."
             ) from exc
         if not spec.model_path.is_file():
-            raise InferenceError(f"Model file is missing: {spec.model_path.name}")
+            raise InferenceError(
+                f"Model file is missing: {spec.model_path.name}. "
+                "Try running 'Verify files' from the Model Library."
+            )
+        try:
+            with spec.model_path.open("rb") as f:
+                f.read(1024)
+        except OSError as exc:
+            raise InferenceError(
+                f"Model file cannot be read: {spec.model_path.name} ({exc}). "
+                "Try running 'Verify files' from the Model Library."
+            ) from exc
         chat_handler = None
         if spec.mmproj_path is not None:
+            if not spec.mmproj_path.is_file():
+                raise InferenceError(
+                    f"Multimodal projector file is missing: {spec.mmproj_path.name}. "
+                    "Try running 'Verify files' from the Model Library."
+                )
+            try:
+                with spec.mmproj_path.open("rb") as f:
+                    f.read(1024)
+            except OSError as exc:
+                raise InferenceError(
+                    f"Multimodal projector file cannot be read: {spec.mmproj_path.name} ({exc}). "
+                    "Try running 'Verify files' from the Model Library."
+                ) from exc
             chat_handler = _vision_chat_handler(spec)
         threads = max(1, (os.cpu_count() or 4) - 2)
         try:
@@ -174,7 +198,11 @@ class LlamaCppEngine(InferenceEngine):
             )
         except Exception as exc:
             self._llm = None
-            raise InferenceError(f"llama.cpp could not load the model: {exc}") from exc
+            raise InferenceError(
+                f"llama.cpp could not load the model: {exc}. "
+                "The file may be corrupted or incompatible. "
+                "Try running 'Verify files' from the Model Library."
+            ) from exc
         self._spec = spec
         self._vision = chat_handler is not None
 

@@ -77,6 +77,20 @@ def test_failed_load_leaves_runtime_empty_and_usable(runtime):
     assert runtime.loaded_model_id == "c"
 
 
+def test_missing_model_file_suggests_verify_files(tmp_path, monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+    from app.inference import LlamaCppEngine
+
+    monkeypatch.setitem(sys.modules, "llama_cpp", MagicMock())
+    engine = LlamaCppEngine()
+    missing_spec = LoadSpec("missing", tmp_path / "does_not_exist.gguf")
+    with pytest.raises(InferenceError) as exc_info:
+        engine.load(missing_spec)
+    assert "missing" in str(exc_info.value).lower()
+    assert "Verify files" in str(exc_info.value)
+
+
 def test_generate_streams_and_stops(runtime):
     with pytest.raises(InferenceError):
         runtime.generate([], GenerationParams(), lambda t: None, lambda: False)
