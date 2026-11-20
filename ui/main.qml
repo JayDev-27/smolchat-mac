@@ -27,13 +27,13 @@ ApplicationWindow {
     menuBar: MenuBar {
         Menu {
             title: qsTr("&File")
-            MenuItem {
+            Action {
                 text: qsTr("New Chat")
                 shortcut: StandardKey.New
                 onTriggered: backend.newChat()
             }
             MenuSeparator {}
-            MenuItem {
+            Action {
                 text: qsTr("Close Window")
                 shortcut: StandardKey.Close
                 onTriggered: window.close()
@@ -42,7 +42,7 @@ ApplicationWindow {
 
         Menu {
             title: qsTr("&Edit")
-            MenuItem {
+            Action {
                 text: qsTr("Undo")
                 shortcut: StandardKey.Undo
                 onTriggered: {
@@ -50,7 +50,7 @@ ApplicationWindow {
                     if (item && typeof item.undo === "function") item.undo()
                 }
             }
-            MenuItem {
+            Action {
                 text: qsTr("Redo")
                 shortcut: StandardKey.Redo
                 onTriggered: {
@@ -59,7 +59,7 @@ ApplicationWindow {
                 }
             }
             MenuSeparator {}
-            MenuItem {
+            Action {
                 text: qsTr("Cut")
                 shortcut: StandardKey.Cut
                 onTriggered: {
@@ -67,7 +67,7 @@ ApplicationWindow {
                     if (item && typeof item.cut === "function") item.cut()
                 }
             }
-            MenuItem {
+            Action {
                 text: qsTr("Copy")
                 shortcut: StandardKey.Copy
                 onTriggered: {
@@ -75,7 +75,7 @@ ApplicationWindow {
                     if (item && typeof item.copy === "function") item.copy()
                 }
             }
-            MenuItem {
+            Action {
                 text: qsTr("Paste")
                 shortcut: StandardKey.Paste
                 onTriggered: {
@@ -83,7 +83,7 @@ ApplicationWindow {
                     if (item && typeof item.paste === "function") item.paste()
                 }
             }
-            MenuItem {
+            Action {
                 text: qsTr("Select All")
                 shortcut: StandardKey.SelectAll
                 onTriggered: {
@@ -95,29 +95,29 @@ ApplicationWindow {
 
         Menu {
             title: qsTr("&View")
-            MenuItem {
+            Action {
                 text: window.sidebarPinned ? qsTr("Hide Sidebar") : qsTr("Show Sidebar")
                 shortcut: "Ctrl+\\"
                 onTriggered: window.sidebarPinned = !window.sidebarPinned
             }
-            MenuItem {
+            Action {
                 text: qsTr("Search Chats…")
                 shortcut: "Ctrl+K"
                 onTriggered: { window.sidebarPinned = true; sidebar.focusSearch() }
             }
             MenuSeparator {}
-            MenuItem {
+            Action {
                 text: qsTr("Model Library…")
                 shortcut: "Ctrl+Shift+M"
                 onTriggered: window.openLibrary("all")
             }
-            MenuItem {
+            Action {
                 text: qsTr("Settings…")
                 shortcut: StandardKey.Preferences
                 onTriggered: settingsDialog.open()
             }
             MenuSeparator {}
-            MenuItem {
+            Action {
                 text: Theme.dark ? qsTr("Switch to Light Mode") : qsTr("Switch to Dark Mode")
                 shortcut: "Ctrl+Shift+L"
                 onTriggered: window.setAppearance("theme", Theme.dark ? "light" : "dark")
@@ -126,12 +126,12 @@ ApplicationWindow {
 
         Menu {
             title: qsTr("&Window")
-            MenuItem {
+            Action {
                 text: qsTr("Minimize")
                 shortcut: "Ctrl+M"
                 onTriggered: window.showMinimized()
             }
-            MenuItem {
+            Action {
                 text: qsTr("Zoom")
                 onTriggered: window.toggleZoom()
             }
@@ -139,11 +139,11 @@ ApplicationWindow {
 
         Menu {
             title: qsTr("&Help")
-            MenuItem {
+            Action {
                 text: qsTr("SmolChat Documentation")
                 onTriggered: Qt.openUrlExternally("https://github.com/smollabs/smolchat-mac#readme")
             }
-            MenuItem {
+            Action {
                 text: qsTr("Report an Issue…")
                 onTriggered: Qt.openUrlExternally("https://github.com/smollabs/smolchat-mac/issues")
             }
@@ -327,8 +327,15 @@ ApplicationWindow {
         }
     }
 
-    // Additional keyboard shortcuts
+    // Keyboard shortcuts
+    Shortcut { sequences: [StandardKey.New]; onActivated: backend.newChat() }
     Shortcut { sequence: "Ctrl+Shift+O"; onActivated: backend.newChat() }
+    Shortcut { sequence: "Ctrl+K"; onActivated: { window.sidebarPinned = true; sidebar.focusSearch() } }
+    Shortcut { sequence: "Ctrl+Shift+M"; onActivated: window.openLibrary("all") }
+    Shortcut { sequences: [StandardKey.Preferences]; onActivated: settingsDialog.open() }
+    Shortcut { sequence: "Ctrl+,"; onActivated: settingsDialog.open() }
+    Shortcut { sequence: "Ctrl+\\"; onActivated: window.sidebarPinned = !window.sidebarPinned }
+    Shortcut { sequence: "Ctrl+Shift+L"; onActivated: window.setAppearance("theme", Theme.dark ? "light" : "dark") }
     Shortcut { sequence: "Ctrl+."; enabled: backend.isGenerating; onActivated: backend.stopGeneration() }
 
     // Splash overlay – sits above everything until initialisation finishes.
