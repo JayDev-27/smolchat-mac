@@ -277,9 +277,21 @@ class LlamaCppEngine(InferenceEngine):
             return n + 8 + 600 * len(m.images)  # role markers + image embedding budget
 
         used = sum(cost(m) for m in system)
+        if not rest and used > budget:
+            raise InferenceError(
+                f"The prompt is too long for {self._spec.model_id}'s context window "
+                f"(~{self._spec.context_length} tokens). Shorten it, increase the context "
+                "size in Settings, or pick a model with a larger context window."
+            )
         kept: list[ChatMessage] = []
         for m in reversed(rest):
             c = cost(m)
+            if not kept and used + c > budget:
+                raise InferenceError(
+                    f"This message is too long for {self._spec.model_id}'s context window "
+                    f"(~{self._spec.context_length} tokens). Shorten it, increase the context "
+                    "size in Settings, or pick a model with a larger context window."
+                )
             if kept and used + c > budget:
                 break
             kept.append(m)

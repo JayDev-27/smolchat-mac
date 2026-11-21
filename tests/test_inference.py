@@ -234,7 +234,60 @@ def test_fit_context_budget_is_never_negative():
     engine = loaded_engine(context_length=2048)
     history = [ChatMessage("user", "a b c"), ChatMessage("assistant", "d e"), ChatMessage("user", "f")]
 
-    payload = engine._fit_context(history, max_tokens=4096)
+    # When max_tokens exceeds context_length, budget is clamped to 0 and any message raises
+    with pytest.raises(InferenceError) as exc_info:
+        engine._fit_context(history, max_tokens=4096)
+    assert "too long" in str(exc_info.value).lower()
 
-    # with no room left only the newest message is sent, and it is still sent
-    assert [m["content"] for m in payload] == ["f"]
+
+def test_fit_context_raises_user_friendly_error_when_latest_message_exceeds_budget():
+    engine = loaded_engine(context_length=2048)
+    # 2048 - 1024 - 64 = 960 tokens budget. A 1000-word message exceeds it.
+    over_budget_msg = ChatMessage("user", " ".join(["word"] * 1000))
+
+    with pytest.raises(InferenceError) as exc_info:
+        engine._fit_context([over_budget_msg], max_tokens=1024)
+
+    msg = str(exc_info.value)
+    assert "fake" in msg  # model_id
+    assert "2048" in msg  # context window
+    # Explains what to do: shorten, context size, or different model
+    assert "shorten" in msg.lower()
+    assert "context" in msg.lower()
+    assert "model" in msg.lower()
+
+
+def test_fit_context_raises_when_latest_message_exceeds_budget_with_history():
+    engine = loaded_engine(context_length=2048)
+    history = [
+        ChatMessage("user", "hello"),
+        ChatMessage("assistant", "hi there"),
+        ChatMessage("user", " ".join(["word"] * 1000)),
+    ]
+
+    with pytest.raises(InferenceError) as exc_info:
+        engine._fit_context(history, max_tokens=1024)
+
+    msg = str(exc_info.value)
+    assert "too long" in msg.lower()
+    assert "shorten" in msg.lower()
+
+
+def test_generate_raises_user_friendly_error_on_over_long_message():
+    engine = loaded_engine(context_length=2048)
+    # effective_max_tokens will clamp to 1024, leaving 960 tokens for prompt budget.
+    over_long = [ChatMessage("user", " ".join(["word"] * 1000))]
+
+    with pytest.raises(InferenceError) as exc_info:
+        engine.generate(
+            over_long,
+            GenerationParams(max_tokens=1024),
+            lambda piece: None,
+            lambda: False,
+        )
+
+    msg = str(exc_info.value)
+    assert not msg.startswith("Generation failed:")
+    assert "too long" in msg.lower()
+    assert "fake" in msg
+    assert "2048" in msg
