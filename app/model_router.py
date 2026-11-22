@@ -9,6 +9,7 @@ alternative, and if nothing compatible is installed it says so.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from .model_manager import ModelEntry
@@ -28,6 +29,28 @@ _LIGHT_PATTERNS = [
 ]
 _DOCUMENT_PATTERNS = [
     r"\b(document|page|pdf|invoice|receipt|form|table|scan|scanned|ocr|transcribe|extract text)\b",
+]
+# Multilingual signals for common complex requests.
+_MULTILINGUAL_HEAVY_PATTERNS = [
+    # Spanish, French, German, Portuguese and Hindi (Romanized)
+    r"\b(explica|explique|explicar|erklaere|erklaeren|"
+    r"analiza|analyse|analysiere|compara|vergleiche|comparer|"
+    r"samjhao|samjhaiye|vishleshan|tulna)\b",
+
+    r"\b(paso a paso|etape par etape|schritt fuer schritt|"
+    r"passo a passo|vistaar se|kadam dar kadam)\b",
+
+    r"\b(codigo|programacion|programmierung|code|"
+    r"debuggen|funcion|funktion|algoritmo|algorithmus|"
+    r"algorithme|karyakram|ganit)\b",
+
+    r"\b(matematicas|mathematik|resolver|loesung|"
+    r"ecuacion|equation|gleichung|hal kijiye)\b",
+]
+
+_MULTILINGUAL_DOCUMENT_PATTERNS = [
+    r"\b(factura|recibo|documento|rechnung|quittung|"
+    r"facture|recu|formulario|formulaire|dastavez|raseed)\b",
 ]
 _CODE_FENCE = re.compile(r"```|^\s{4,}\S", re.M)
 
@@ -58,29 +81,57 @@ class RouteDecision:
     def ok(self) -> bool:
         return self.model_id is not None
 
+def _normalize_for_matching(text: str) -> str:
+    """Normalize accented text for multilingual keyword matching."""
+    text = text.lower().translate(
+        str.maketrans({
+            "\u00e4": "ae",
+            "\u00f6": "oe",
+            "\u00fc": "ue",
+            "\u00df": "ss",
+        })
+    )
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(
+        char for char in normalized
+        if not unicodedata.combining(char)
+    )
 
 def classify(request: RouteRequest) -> tuple[str, float]:
     """Return ``(task, complexity)`` for a request."""
     text = request.text.strip()
-    lowered = text.lower()
+    lowered = _normalize_for_matching(text)
 
     task = "chat"
     if request.has_images:
         task = "vision"
-        if any(re.search(p, lowered) for p in _DOCUMENT_PATTERNS):
+        if any(
+            re.search(p, lowered)
+            for p in _DOCUMENT_PATTERNS + _MULTILINGUAL_DOCUMENT_PATTERNS
+        ):
             task = "document"
 
     words = len(text.split())
     score = min(words / 120.0, 0.45)
-    heavy_hits = sum(1 for p in _HEAVY_PATTERNS if re.search(p, lowered))
+
+    heavy_hits = sum(
+        1
+        for p in _HEAVY_PATTERNS + _MULTILINGUAL_HEAVY_PATTERNS
+        if re.search(p, lowered)
+    )
     score += 0.22 * heavy_hits
+
     if _CODE_FENCE.search(text):
         score += 0.3
+
     if text.count("\n") >= 4:
         score += 0.1
+
     if words <= 8 and any(re.search(p, lowered) for p in _LIGHT_PATTERNS):
         score -= 0.25
+
     score += min(request.history_turns, 10) * 0.015
+
     return task, max(0.0, min(1.0, score))
 
 
