@@ -1,7 +1,26 @@
 import pytest
 
 from app.formatting import DARK_SYNTAX, highlight, segment_message
+def test_python_highlighting_is_preserved():
+    rendered = highlight(
+        "def greet(name):\n    return name",
+        "python",
+        DARK_SYNTAX,
+    )
 
+
+    assert f'color:{DARK_SYNTAX["keyword"]}' in rendered
+
+@pytest.mark.parametrize("language", [
+    "html", "xml", "css", "scss", "yaml", "yml",
+    "toml", "md", "markdown",
+])
+def test_formats_without_dedicated_highlighting_remain_plain(language):
+    code = "<tag> value: 'hello'"
+
+    assert highlight(code, language, DARK_SYNTAX) == (
+        "&lt;tag&gt; value: &#x27;hello&#x27;"
+    )
 
 @pytest.mark.parametrize("language", [
     "html", "xml", "css", "scss", "yaml", "yml",
@@ -36,7 +55,13 @@ def test_supported_fence_styles(fence, language):
     assert segments[0]["text"] == "print(1)"
     assert segments[0]["open"] is False
 
+def test_indented_fence_strips_opening_fence_indentation():
+    message = "  ```python\n  print(1)\n    value = 2\n  ```\n"
 
+    segments = segment_message(message)
+
+    assert len(segments) == 1
+    assert segments[0]["text"] == "print(1)\n  value = 2"
 def test_shorter_nested_fence_does_not_close_outer_fence():
     message = "````python\n```\nprint(1)\n````\n"
 

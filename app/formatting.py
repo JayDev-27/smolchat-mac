@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import html
 import re
-
-
 _THINK_OPEN = "<think>"
 _THINK_CLOSE = "</think>"
 
@@ -52,28 +50,55 @@ _KEYWORDS = {
     "primary key foreign references distinct union all",
 }
 _LANG_ALIASES = {
-        # HTML and XML
-    "html": "js", "htm": "js", "xml": "js",
-    "xhtml": "js", "svg": "js",
+    # Python
+    "py": "python",
+    "python": "python",
+    "python3": "python",
 
-    # CSS
-    "css": "js", "scss": "js", "sass": "js", "less": "js",
+    # JavaScript and TypeScript
+    "js": "js",
+    "javascript": "js",
+    "ts": "js",
+    "typescript": "js",
+    "jsx": "js",
+    "tsx": "js",
 
-    # Configuration formats
-    "yaml": "shell", "yml": "shell", "toml": "shell",
-    "ini": "shell", "cfg": "shell", "conf": "shell",
+    # JSON and JVM languages
+    "json": "js",
+    "java": "c",
+    "kotlin": "c",
 
-    # Markdown and diff
-    "md": "js", "markdown": "js",
-    "diff": "shell", "patch": "shell",
-
-    # Docker
-    "dockerfile": "shell", "docker": "shell",
+    # C-family languages
+    "c": "c",
+    "cpp": "c",
+    "c++": "c",
+    "cc": "c",
+    "h": "c",
+    "cs": "c",
+    "csharp": "c",
 
     # Other languages
-    "rb": "python", "ruby": "python",
-    "php": "js", "lua": "c",
-    "r": "python", "rscript": "python",
+    "rust": "c",
+    "rs": "c",
+    "go": "c",
+    "swift": "c",
+    "rb": "python",
+    "ruby": "python",
+    "php": "js",
+    "lua": "c",
+    "r": "python",
+    "rscript": "python",
+
+
+    # Shell
+    "bash": "shell",
+    "sh": "shell",
+    "zsh": "shell",
+    "shell": "shell",
+    "console": "shell",
+
+    # SQL
+    "sql": "sql",
 }
 _HASH_COMMENT = {"python", "shell"}
 
@@ -159,7 +184,7 @@ def _split_code(text: str, palette: dict[str, str]) -> list[dict]:
 
     while index < len(lines):
         opening = re.match(
-            r"^ {0,3}(`{3,}|~{3,})[ \t]*([\w+#.-]*)[^\n]*$",
+            r"^( {0,3})(`{3,}|~{3,})[ \t]*([\w+#.-]*)[^\n]*$",
             lines[index].rstrip("\r\n"),
         )
 
@@ -170,10 +195,11 @@ def _split_code(text: str, palette: dict[str, str]) -> list[dict]:
 
         flush_prose()
 
-        fence = opening.group(1)
+        indent = len(opening.group(1))
+        fence = opening.group(2)
         marker = fence[0]
         length = len(fence)
-        lang = opening.group(2)
+        lang = opening.group(3)
 
         index += 1
         code_lines: list[str] = []
@@ -182,15 +208,23 @@ def _split_code(text: str, palette: dict[str, str]) -> list[dict]:
         close_re = re.compile(
             rf"^ {{0,3}}{re.escape(marker)}{{{length},}}[ \t]*$"
         )
-
         while index < len(lines):
             if close_re.match(lines[index].rstrip("\r\n")):
                 closed = True
                 index += 1
                 break
 
-            code_lines.append(lines[index])
+            line = lines[index]
+            if indent:
+                leading_spaces = len(line) - len(line.lstrip(" "))
+                line = line[min(indent, leading_spaces):]
+
+            code_lines.append(line)
             index += 1
+
+
+
+
 
         code = "".join(code_lines).rstrip("\r\n")
 
