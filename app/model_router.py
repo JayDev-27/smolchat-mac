@@ -9,6 +9,7 @@ alternative, and if nothing compatible is installed it says so.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from .model_manager import ModelEntry
@@ -80,11 +81,26 @@ class RouteDecision:
     def ok(self) -> bool:
         return self.model_id is not None
 
+def _normalize_for_matching(text: str) -> str:
+    """Normalize accented text for multilingual keyword matching."""
+    text = text.lower().translate(
+        str.maketrans({
+            "\u00e4": "ae",
+            "\u00f6": "oe",
+            "\u00fc": "ue",
+            "\u00df": "ss",
+        })
+    )
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(
+        char for char in normalized
+        if not unicodedata.combining(char)
+    )
 
 def classify(request: RouteRequest) -> tuple[str, float]:
-    """Return (task, complexity) for a request."""
+    """Return ``(task, complexity)`` for a request."""
     text = request.text.strip()
-    lowered = text.lower()
+    lowered = _normalize_for_matching(text)
 
     task = "chat"
     if request.has_images:

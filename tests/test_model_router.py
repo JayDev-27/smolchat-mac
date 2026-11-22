@@ -1,3 +1,4 @@
+import pytest
 from app.config import AppPaths
 from app.model_manager import ModelRegistry
 from app.model_router import RouteRequest, SystemState, classify, route
@@ -86,19 +87,44 @@ def test_loaded_model_is_preferred_when_close():
     sticky = route(req, TEXT_MODELS, SystemState(12 * GB, 16 * GB, loaded_model_id=other, loaded_model_bytes=GB // 2))
     assert sticky.model_id == other
 
-def test_multilingual_complex_requests():
-    requests = [
-        "Explica paso a paso cómo funciona este codigo y compara dos enfoques",
-        "Explique etape par etape comment analyser cet algorithme",
-        "Erklaere schritt fuer schritt, wie dieser Algorithmus funktioniert",
-    ]
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Explica paso a paso cómo funciona este código y compara dos enfoques",
+        "Explique étape par étape comment analyser cet algorithme",
+        "Erkläre mir ausführlich Schritt für Schritt, wie dieser Algorithmus funktioniert",
+        "Explique passo a passo como funciona este código e compare os resultados",
+    ],
+)
+def test_multilingual_complex_requests(text):
+    task, complexity = classify(RouteRequest(text))
+    assert task == "chat"
+    assert complexity > 0.6
 
-    for text in requests:
-        task, complexity = classify(RouteRequest(text))
-        assert task == "chat"
-        assert complexity > 0.6
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Explica paso a paso cómo funciona este código y compara dos enfoques",
+        "Explique étape par étape comment analyser cet algorithme",
+        "Erkläre mir ausführlich Schritt für Schritt, wie dieser Algorithmus funktioniert",
+        "Explique passo a passo como funciona este código e compare os resultados",
+    ],
+)
+def test_multilingual_complex_requests(text):
+    task, complexity = classify(RouteRequest(text))
+    assert task == "chat"
+    assert complexity > 0.6
 
 
+
+def test_german_sharp_s_normalization():
+    from app.model_router import _normalize_for_matching
+
+    assert _normalize_for_matching("Straße") == "strasse"
+    assert _normalize_for_matching("Ä Ö Ü") == "ae oe ue"
+
+
+# Keep your existing test_multilingual_document_detection() below this.
 def test_multilingual_document_detection():
     for text in [
         "Extrae los datos de esta factura",
