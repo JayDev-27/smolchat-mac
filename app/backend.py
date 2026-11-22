@@ -1172,9 +1172,32 @@ class Backend(QObject):
                 text += f" · {eta}"
         return text
 
-    @Property(int, notify=libraryChanged)
-    def activeDownloads(self) -> int:  # noqa: N802
-        return len(self._downloads)
+        @Property(int, notify=libraryChanged)
+        def activeDownloads(self) -> int:  # noqa: N802
+         return len(self._downloads)
+
+    def _download_with_lock(
+        self, model_id: str, downloader: ModelDownloader
+    ) -> None:
+        queued = False
+
+        while not self._download_lock.acquire(timeout=0.1):
+            if downloader.cancelled:
+                raise DownloadCancelled
+
+            if not queued:
+                total = sum(f.size for f in downloader.files_to_download)
+                self._downloadProgress.emit(
+                    DownloadProgress(model_id, 0, total, stage="queued")
+                )
+                queued = True
+
+        try:
+            if downloader.cancelled:
+                raise DownloadCancelled
+            downloader.download()
+        finally:
+            self._download_lock.release()
 
     @Slot(str)
     def downloadModel(self, model_id: str) -> None:  # noqa: N802
@@ -1199,13 +1222,7 @@ class Backend(QObject):
 
         def work() -> None:
             try:
-                if self._download_lock.locked():
-                    total = sum(f.size for f in downloader.files_to_download)
-                    self._downloadProgress.emit(
-                        DownloadProgress(model_id, 0, total, stage="queued")
-                    )
-                with self._download_lock:
-                    downloader.download()
+                self._download_with_lock(model_id, downloader)
                 self._downloadFinished.emit(model_id, "")
             except DownloadCancelled:
                 self._downloadFinished.emit(model_id, "cancelled")
@@ -1379,8 +1396,8 @@ class Backend(QObject):
                     self._downloadProgress.emit(
                         DownloadProgress(model_id, 0, total, stage="queued")
                     )
-                with self._download_lock:
-                    downloader.download()
+                self._download_with_lock(model_id, downloader)
+                downloader.download()
                 self._downloadFinished.emit(model_id, "")
             except DownloadCancelled:
                 self._downloadFinished.emit(model_id, "cancelled")
