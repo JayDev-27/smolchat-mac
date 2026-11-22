@@ -12,7 +12,7 @@ Covers:
 """
 
 from __future__ import annotations
-
+import threading
 import datetime
 import time
 from unittest.mock import MagicMock
@@ -24,7 +24,14 @@ from app.backend import Backend, DictListModel, _date_section
 from app.config import HardwareInfo, Settings
 from app.database import Message
 from app.inference import GenerationResult, InferenceEngine, LoadSpec
-from app.model_manager import InstalledModel, ModelEntry, ModelFile, ModelRegistry, ModelStore
+from app.model_manager import (
+    DownloadCancelled,
+    InstalledModel,
+    ModelEntry,
+    ModelFile,
+    ModelRegistry,
+    ModelStore,
+)
 
 
 # Ensure a QCoreApplication exists in headless mode
@@ -787,3 +794,36 @@ class TestConversationManagement:
         backend.newChat()
         assert backend.currentConversationId == ""
         assert backend.currentTitle == "New chat"
+
+def test_queued_download_can_be_cancelled(initialized_backend):
+    backend, _ = initialized_backend
+
+    class FakeDownloader:
+        cancelled = False
+        files_to_download = []
+
+        def download(self):
+            pytest.fail("Download should not start after cancellation")
+
+    downloader = FakeDownloader()
+    errors = []
+
+    backend._download_lock.acquire()
+
+    def worker():
+        try:
+            backend._download_with_lock("test-model", downloader)
+        except DownloadCancelled:
+            errors.append("cancelled")
+
+    thread = threading.Thread(target=worker)
+    try:
+        thread.start()
+        time.sleep(0.2)
+        downloader.cancelled = True
+        thread.join(timeout=2)
+    finally:
+        backend._download_lock.release()
+
+    assert not thread.is_alive()
+    assert errors == ["cancelled"]
